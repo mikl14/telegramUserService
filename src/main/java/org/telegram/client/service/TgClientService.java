@@ -239,7 +239,7 @@ public class TgClientService {
                             // Get the chat name
                             String title = chatIdResult.title;
                             // Print the message
-                            if(chatId != 7613327420L) {
+                            if(chatId != botId) {
                                 lastChats.add(chatId);
                                 TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
                                 forwardMessage.fromChatId = chatId; // ID исходного чата
