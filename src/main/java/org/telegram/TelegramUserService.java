@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-public class TelegramUserService {
+public class  TelegramUserService {
 
     public static void main(String[] args) {
         SpringApplication.run(TelegramUserService.class, args);

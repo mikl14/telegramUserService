@@ -15,12 +15,10 @@ import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 
 @Service
 @Data
@@ -37,47 +35,46 @@ public class TgClientService {
 
     @Getter
     @Setter
-    static ArrayList<Long> lastChats = new ArrayList<Long>();
+    @Value("${api.id}")
+    int apiId;
+
+    @Getter
+    @Setter
+    @Value("${api.hash}")
+    String apiHash;
+
+    @Getter
+    @Setter
+    @Value("${user.number}")
+    String userNumber;
+
     public TgClientService() {
 
     }
 
-
+    /**
+     * <b>Init</b> - инициализация, сюда нужно вбить все данные пользователя
+     */
     @Async
-    public void Init()
-    {
+    public void Init() {
         try {
             Init.init();
             Log.setLogMessageHandler(1, new Slf4JLogMessageHandler());
 
             try (SimpleTelegramClientFactory clientFactory = new SimpleTelegramClientFactory()) {
-                // Obtain the API token
-                //
-                APIToken apiToken = new APIToken(24861413, "6d2e6183de423431c34486f0bdd92371");
-                //
-                //  apiToken = APIToken.example();
 
+                APIToken apiToken = new APIToken(apiId, apiHash);
 
-                // Configure the client
                 TDLibSettings settings = TDLibSettings.create(apiToken);
 
-                // Configure the session directory.
-                // After you authenticate into a session, the authentication will be skipped from the next restart!
-                // If you want to ensure to match the authentication supplier user/bot with your session user/bot,
-                //   you can name your session directory after your user id, for example: "tdlib-session-id12345"
                 Path sessionPath = Paths.get("example-tdlight-session");
                 settings.setDatabaseDirectoryPath(sessionPath.resolve("data"));
                 settings.setDownloadedFilesDirectoryPath(sessionPath.resolve("downloads"));
 
-                // Prepare a new client builder
                 SimpleTelegramClientBuilder clientBuilder = clientFactory.builder(settings);
+                SimpleAuthenticationSupplier<?> authenticationData = AuthenticationSupplier.user(userNumber);
 
-                // Configure the authentication info
-                // Replace with AuthenticationSupplier.consoleLogin(), or .user(xxx), or .bot(xxx);
-                SimpleAuthenticationSupplier<?> authenticationData = AuthenticationSupplier.user("+79771183130");
-                // This is an example, remove this line to use the real telegram datacenters!
-                //  settings.setUseTestDatacenter(true);
-                app = new TgApp(clientBuilder, authenticationData, adminId,botChatId);
+                app = new TgApp(clientBuilder, authenticationData, adminId, botChatId);
 
             }
         } catch (Exception e) {
@@ -85,38 +82,60 @@ public class TgClientService {
         }
     }
 
-
-    public void sendTxtMessage(long chatId, String message) throws ExecutionException, InterruptedException, TimeoutException {
-        var req = new TdApi.SendMessage();
-        req.chatId = chatId;
-        var txt = new TdApi.InputMessageText();
-        txt.text = new TdApi.FormattedText(message, new TdApi.TextEntity[0]);
-        req.inputMessageContent = txt;
-        app.getClient().sendMessage(req, true).get(1, TimeUnit.MINUTES);
-    }
-
+    /**
+     * <b>getChat</b> - возвращает чат пользователя по chatId
+     * @param chatId
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
     public TdApi.Chat getChat(long chatId) throws ExecutionException, InterruptedException, TimeoutException {
         var req = new TdApi.GetChat(chatId);
         TdApi.Chat chat = app.getClient().send(req).get(1, TimeUnit.MINUTES);
         return chat;
     }
+
+    /**
+     * <b>getChatList</b> - возвращает массив ChatId всех чатов пользователя
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
     public long[] getChatList() throws ExecutionException, InterruptedException, TimeoutException {
-        TdApi.GetChats req = new TdApi.GetChats(new TdApi.ChatListMain(),50);
+        TdApi.GetChats req = new TdApi.GetChats(new TdApi.ChatListMain(), 50);
 
         TdApi.Chats chats = app.getClient().send(req).get(1, TimeUnit.MINUTES);
 
         return chats.chatIds;
     }
+
+    /**
+     * <b>FindAChats</b> - Возвращает массив публичных чатов найденных по запросу
+     * @param query - любой поисковой запрос
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
     public long[] FindAChats(String query) throws ExecutionException, InterruptedException, TimeoutException {
         TdApi.SearchPublicChats req = new TdApi.SearchPublicChats(query);
         TdApi.Chats res = app.getClient().send(req).get(1, TimeUnit.MINUTES);
         return res.chatIds;
     }
 
+    /**
+     * <b>findAChatByName</b> - находит чат по username, воспринимает формат @userName и username
+     * @param username
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
     public TdApi.Chat findAChatByName(String username) throws ExecutionException, InterruptedException, TimeoutException {
-        if(!username.startsWith("@"))
-        {
-            StringBuilder sb = new StringBuilder("@"+username);
+        if (!username.startsWith("@")) {
+            StringBuilder sb = new StringBuilder("@" + username);
             username = sb.toString();
         }
         TdApi.SearchPublicChat req = new TdApi.SearchPublicChat(username);
@@ -124,22 +143,89 @@ public class TgClientService {
         return res;
     }
 
+    /**
+     * <b>muteChat</b> - Отключает любые уведомления в чате
+     * @param chatId
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
+    public void muteChat(long chatId) throws ExecutionException, InterruptedException, TimeoutException {
+        TdApi.SetChatNotificationSettings notificationSettings = new TdApi.SetChatNotificationSettings();
+
+        TdApi.ChatNotificationSettings notification = new TdApi.ChatNotificationSettings();
+        notification.disableMentionNotifications = true;
+        notification.disablePinnedMessageNotifications = true;
+        notification.soundId = 0;
+        notification.muteFor = Integer.MAX_VALUE;
+
+        notificationSettings.chatId = chatId;
+        notificationSettings.notificationSettings = notification;
+
+        app.getClient().send(notificationSettings).get(1, TimeUnit.MINUTES);
+    }
+
+    /**
+     * <b>joinPrivateChat</b> - Присоединяет пользователя в закрытый канал по ссылке приглашению
+     * @param inviteLink
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
+    public TdApi.Chat joinPrivateChat(String inviteLink) throws ExecutionException, InterruptedException, TimeoutException {
+        inviteLink = inviteLink.replace("\"", "");
+        try {
+
+            TdApi.JoinChatByInviteLink joinChatByInviteLink = new TdApi.JoinChatByInviteLink(inviteLink);
+            var res = app.getClient().send(joinChatByInviteLink).get(1, TimeUnit.MINUTES);
+
+
+            muteChat(res.id);
+            return res;
+        } catch (ExecutionException e) {
+
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * <b>joinChat</b> - Присоединяет пользователя в публичный канал по его id
+     * @param chatId
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
     public boolean joinChat(long chatId) throws ExecutionException, InterruptedException, TimeoutException {
         long[] chats = getChatList();
-        if(Arrays.stream(chats).noneMatch(value -> value == chatId)) {
+        if (Arrays.stream(chats).noneMatch(value -> value == chatId)) {
             try {
                 TdApi.JoinChat req = new TdApi.JoinChat(chatId);
                 app.getClient().send(req).get(1, TimeUnit.MINUTES);
+
+                muteChat(chatId);
                 return true;
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 return false;
             }
         }
         return true;
     }
 
+    /**
+     * <b>forwardMessage</b> - Пересылает сообщение
+     * @param chatId - куда пересылаем
+     * @param messageId - что пересылаем
+     * @param targetChatId - откуда пересылаем
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
     public void forwardMessage(long chatId, long messageId, long targetChatId) {
         // Создание объекта ForwardMessage
         TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
@@ -150,36 +236,40 @@ public class TgClientService {
         app.getClient().send(forwardMessage);
     }
 
+    /**
+     * <b>getLastMessage</b> - Возвращает последнее сообщение из чата
+     * @param chatId
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
     public TdApi.Message getLastMessage(long chatId) throws ExecutionException, InterruptedException, TimeoutException {
 
         TdApi.Chat chat = getChat(chatId);
         return chat.lastMessage;
     }
+
     public static class TgApp implements AutoCloseable {
 
         private final SimpleTelegramClient client;
 
-        /**
-         * Admin user id, used by the stop command example
-         */
         private final long adminId;
 
         private final long botId;
+
         public TgApp(SimpleTelegramClientBuilder clientBuilder,
-                          SimpleAuthenticationSupplier<?> authenticationData,
-                          long adminId, long botId) {
+                     SimpleAuthenticationSupplier<?> authenticationData,
+                     long adminId, long botId) {
             this.adminId = adminId;
             this.botId = botId;
-            // Add an example update handler that prints when the bot is started
+
             clientBuilder.addUpdateHandler(TdApi.UpdateAuthorizationState.class, this::onUpdateAuthorizationState);
 
-            // Add an example command handler that stops the bot
             clientBuilder.addCommandHandler("stop", this::onStopCommand);
 
-            // Add an example update handler that prints every received message
             clientBuilder.addUpdateHandler(TdApi.UpdateNewMessage.class, this::onUpdateNewMessage);
 
-            // Build the client
             this.client = clientBuilder.build(authenticationData);
         }
 
@@ -193,7 +283,7 @@ public class TgClientService {
         }
 
         /**
-         * Print the bot status
+         * Выводим статус
          */
         private void onUpdateAuthorizationState(TdApi.UpdateAuthorizationState update) {
             TdApi.AuthorizationState authorizationState = update.authorizationState;
@@ -215,7 +305,6 @@ public class TgClientService {
             // Get the message content
             TdApi.MessageContent messageContent = update.message.content;
 
-            // Get the message text
             String text;
             if (messageContent instanceof TdApi.MessageText messageText) {
                 // Get the text of the text message
@@ -239,8 +328,7 @@ public class TgClientService {
                             // Get the chat name
                             String title = chatIdResult.title;
                             // Print the message
-                            if(chatId != botId) {
-                                lastChats.add(chatId);
+                            if (chatId != botId) {
                                 TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
                                 forwardMessage.fromChatId = chatId; // ID исходного чата
                                 forwardMessage.messageIds = new long[]{update.message.id}; // ID сообщения для пересылки

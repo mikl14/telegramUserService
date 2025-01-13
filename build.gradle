@@ -39,7 +39,14 @@ dependencies {
     // Не указывайте версии для зависимостей ниже!
     implementation group: 'it.tdlight', name: 'tdlight-java'
     // Для поддержки Java 8 используйте следующий классификатор
-    implementation group: 'it.tdlight', name: 'tdlight-natives', classifier: 'windows_amd64'
+    implementation group: 'it.tdlight', name: 'tdlight-natives', classifier: 'linux_arm64_gnu_ssl3'
+    // implementation group: 'it.tdlight', name: 'tdlight-natives', classifier: 'windows_amd64'
+}
+
+bootJar {
+    tasks.named('bootJar') {
+        mainClass.set('org.telegram.TelegramUserService') // Укажите ваш главный класс здесь
+    }
 }
 
 tasks.named('test') {
