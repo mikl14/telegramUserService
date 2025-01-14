@@ -30,7 +30,7 @@ public class RestController {
         try {
             TdApi.Chat chat = telegramClient.joinPrivateChat(inviteLink);
             if (chat != null) {
-                return chat.title + ";" + chat.id;
+                return chat.title + ";" + chat.id + ";" + inviteLink;
             }
         } catch (ExecutionException | TimeoutException e) {
             return "chat_is_already";
