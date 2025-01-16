@@ -48,6 +48,10 @@ public class RestController {
     @PostMapping("/joinChat")
     public String joinToChat(@RequestBody String chatName) {
         try {
+            if(chatName.startsWith("https://t.me/"))
+            {
+                chatName = chatName.replace("https://t.me/","@");
+            }
             TdApi.Chat chat = telegramClient.findAChatByName(chatName);
 
             if (telegramClient.joinChat(chat.id)) {
