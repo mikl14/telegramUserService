@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.telegram.client.service.TgClientService;
 
+import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
@@ -66,5 +67,27 @@ public class RestController {
         return "no_chat";
     }
 
+    /**
+     * <b>leaveChat</b> - выходит из указанного чата
+     * @param chatId
+     * @return
+     */
+    @PostMapping("/leaveChat")
+    public String leaveFromChat(@RequestBody String chatId) {
+        try {
+            long id = Long.parseLong(chatId);
+            long[] chats = telegramClient.getChatList();
+            if (Arrays.stream(chats).anyMatch(x -> x == id))
+            {
+                telegramClient.leaveChatByChatId(id);
+            }
+
+        } catch (ExecutionException | TimeoutException e) {
+            return "no_chat";
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        return "no_chat";
+    }
 
 }

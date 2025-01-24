@@ -104,11 +104,24 @@ public class TgClientService {
      * @throws TimeoutException
      */
     public long[] getChatList() throws ExecutionException, InterruptedException, TimeoutException {
-        TdApi.GetChats req = new TdApi.GetChats(new TdApi.ChatListMain(), 50);
+        TdApi.GetChats req = new TdApi.GetChats(new TdApi.ChatListMain(), Integer.MAX_VALUE);
 
         TdApi.Chats chats = app.getClient().send(req).get(1, TimeUnit.MINUTES);
 
         return chats.chatIds;
+    }
+
+
+    /**
+     * <b>leaveChatByChatId</b> - выходит из чата по chatID
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     * @throws TimeoutException
+     */
+    public void leaveChatByChatId(long chatId) throws ExecutionException, InterruptedException, TimeoutException {
+        TdApi.LeaveChat req = new TdApi.LeaveChat(chatId);
+        TdApi.Ok res = app.getClient().send(req).get(1, TimeUnit.MINUTES);
     }
 
     /**
@@ -327,13 +340,13 @@ public class TgClientService {
                         } else {
                             // Get the chat name
                             String title = chatIdResult.title;
+
                             // Print the message
                             if (chatId != botId) {
                                 TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
                                 forwardMessage.fromChatId = chatId; // ID исходного чата
                                 forwardMessage.messageIds = new long[]{update.message.id}; // ID сообщения для пересылки
                                 forwardMessage.chatId = botId; // ID целевого чата
-
                                 client.send(forwardMessage);
                                 System.out.printf("Received new message from chat %s (%s): %s%n", title, chatId, text);
                             }
