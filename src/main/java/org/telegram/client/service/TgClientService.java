@@ -11,11 +11,13 @@ import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -311,6 +313,7 @@ public class TgClientService {
             }
         }
 
+        Map<Long,List<TdApi.Message>> messageMap = new HashMap<>();
         /**
          * Print new messages received via updateNewMessage
          */
@@ -343,18 +346,72 @@ public class TgClientService {
 
                             // Print the message
                             if (chatId != botId) {
-                                TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
-                                forwardMessage.fromChatId = chatId; // ID исходного чата
-                                forwardMessage.messageIds = new long[]{update.message.id}; // ID сообщения для пересылки
-                                forwardMessage.chatId = botId; // ID целевого чата
-                                client.send(forwardMessage);
-                                System.out.printf("Received new message from chat %s (%s): %s%n", title, chatId, text);
+                                long albumId = update.message.mediaAlbumId;
+
+                                if (albumId != 0) {
+
+                                        TdApi.Message mes = new TdApi.Message();
+                                        mes.chatId = update.message.chatId;
+                                        mes.mediaAlbumId = update.message.mediaAlbumId;
+                                        mes.id = update.message.id;
+                                        mes.content = update.message.content;
+                                        if(messageMap.containsKey(mes.mediaAlbumId))
+                                        {
+                                            try {
+                                                List<TdApi.Message> messageList = messageMap.get(mes.mediaAlbumId);
+                                                messageList.add(mes);
+                                                System.out.println("ss");
+                                            }
+                                            catch (Exception e)
+                                            {
+                                                System.out.println("sq");
+                                            }
+
+                                        }
+                                        else
+                                        {
+                                            List<TdApi.Message> messageList = new ArrayList<>();
+                                            messageList.add(mes);
+                                            messageMap.put(mes.mediaAlbumId,messageList);
+                                        }
+                                }
+                                else {
+
+                                    if(!messageMap.isEmpty())
+                                    {
+                                        for(long key : messageMap.keySet())
+                                        {
+                                            long[] mesIds = messageMap.get(key).stream().mapToLong(a-> a.id).toArray();
+
+                                            TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
+                                            forwardMessage.fromChatId = messageMap.get(key).get(0).chatId; // ID исходного чата
+                                            forwardMessage.messageIds = mesIds; // ID сообщения для пересылки
+                                            forwardMessage.messageThreadId = messageMap.get(key).get(0).messageThreadId;
+                                            forwardMessage.chatId = botId; // ID целевого чата
+                                            client.send(forwardMessage);
+                                            System.out.printf("Received new MediaGroupMessage");
+                                        }
+                                        messageMap.clear();
+                                    }
+
+                                    TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
+
+                                    forwardMessage.fromChatId = chatId; // ID исходного чата
+                                    forwardMessage.messageIds = new long[]{update.message.id}; // ID сообщения для пересылки
+                                    forwardMessage.messageThreadId = update.message.messageThreadId;
+                                    forwardMessage.chatId = botId; // ID целевого чата
+                                    client.send(forwardMessage);
+                                    System.out.printf("Received new message from chat %s (%s): %s%n", title, chatId, text);
+
+                                }
+
                             }
 
 
                         }
                     });
         }
+
 
         /**
          * Close the bot if the /stop command is sent by the administrator
