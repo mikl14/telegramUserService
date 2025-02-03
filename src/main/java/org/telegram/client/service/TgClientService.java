@@ -11,16 +11,12 @@ import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
 @Service
 @Data
@@ -86,6 +82,7 @@ public class TgClientService {
 
     /**
      * <b>getChat</b> - возвращает чат пользователя по chatId
+     *
      * @param chatId
      * @return
      * @throws ExecutionException
@@ -100,6 +97,7 @@ public class TgClientService {
 
     /**
      * <b>getChatList</b> - возвращает массив ChatId всех чатов пользователя
+     *
      * @return
      * @throws ExecutionException
      * @throws InterruptedException
@@ -116,6 +114,7 @@ public class TgClientService {
 
     /**
      * <b>leaveChatByChatId</b> - выходит из чата по chatID
+     *
      * @return
      * @throws ExecutionException
      * @throws InterruptedException
@@ -128,6 +127,7 @@ public class TgClientService {
 
     /**
      * <b>FindAChats</b> - Возвращает массив публичных чатов найденных по запросу
+     *
      * @param query - любой поисковой запрос
      * @return
      * @throws ExecutionException
@@ -142,6 +142,7 @@ public class TgClientService {
 
     /**
      * <b>findAChatByName</b> - находит чат по username, воспринимает формат @userName и username
+     *
      * @param username
      * @return
      * @throws ExecutionException
@@ -160,6 +161,7 @@ public class TgClientService {
 
     /**
      * <b>muteChat</b> - Отключает любые уведомления в чате
+     *
      * @param chatId
      * @return
      * @throws ExecutionException
@@ -183,6 +185,7 @@ public class TgClientService {
 
     /**
      * <b>joinPrivateChat</b> - Присоединяет пользователя в закрытый канал по ссылке приглашению
+     *
      * @param inviteLink
      * @return
      * @throws ExecutionException
@@ -209,6 +212,7 @@ public class TgClientService {
 
     /**
      * <b>joinChat</b> - Присоединяет пользователя в публичный канал по его id
+     *
      * @param chatId
      * @return
      * @throws ExecutionException
@@ -233,8 +237,9 @@ public class TgClientService {
 
     /**
      * <b>forwardMessage</b> - Пересылает сообщение
-     * @param chatId - куда пересылаем
-     * @param messageId - что пересылаем
+     *
+     * @param chatId       - куда пересылаем
+     * @param messageId    - что пересылаем
      * @param targetChatId - откуда пересылаем
      * @return
      * @throws ExecutionException
@@ -253,6 +258,7 @@ public class TgClientService {
 
     /**
      * <b>getLastMessage</b> - Возвращает последнее сообщение из чата
+     *
      * @param chatId
      * @return
      * @throws ExecutionException
@@ -273,6 +279,11 @@ public class TgClientService {
 
         private final long botId;
 
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
+        Map<Long, List<TdApi.Message>> messageMap = new HashMap<>();
+
+
         public TgApp(SimpleTelegramClientBuilder clientBuilder,
                      SimpleAuthenticationSupplier<?> authenticationData,
                      long adminId, long botId) {
@@ -286,6 +297,39 @@ public class TgClientService {
             clientBuilder.addUpdateHandler(TdApi.UpdateNewMessage.class, this::onUpdateNewMessage);
 
             this.client = clientBuilder.build(authenticationData);
+
+            /**
+             * Взводим таск чтобы каждые 5 секунд отправлять накопленные коллажи с медиа
+             */
+            Runnable tdlibTask = () -> {
+                try {
+                    // Вызов метода TDLib (пример: получение чатов)
+                    if (!messageMap.isEmpty()) {
+                        for (long key : messageMap.keySet()) {
+                            long[] mesIds = messageMap.get(key).stream().mapToLong(a -> a.id).toArray();
+
+                            TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
+                            forwardMessage.fromChatId = messageMap.get(key).get(0).chatId; // ID исходного чата
+                            forwardMessage.messageIds = mesIds; // ID сообщения для пересылки
+                            forwardMessage.messageThreadId = messageMap.get(key).get(0).messageThreadId;
+                            forwardMessage.chatId = botId; // ID целевого чата
+                            client.send(forwardMessage);
+                        }
+                        messageMap.clear();
+                    }
+
+
+                } catch (Exception e) {
+                    System.err.println("Ошибка: " + e.getMessage());
+                }
+            };
+
+            scheduler.scheduleAtFixedRate(
+                    tdlibTask,
+                    5,     // Начальная задержка (0 = сразу)
+                    5,     // Интервал
+                    TimeUnit.SECONDS
+            );
         }
 
         @Override
@@ -313,7 +357,7 @@ public class TgClientService {
             }
         }
 
-        Map<Long,List<TdApi.Message>> messageMap = new HashMap<>();
+
         /**
          * Print new messages received via updateNewMessage
          */
@@ -350,50 +394,25 @@ public class TgClientService {
 
                                 if (albumId != 0) {
 
-                                        TdApi.Message mes = new TdApi.Message();
-                                        mes.chatId = update.message.chatId;
-                                        mes.mediaAlbumId = update.message.mediaAlbumId;
-                                        mes.id = update.message.id;
-                                        mes.content = update.message.content;
-                                        if(messageMap.containsKey(mes.mediaAlbumId))
-                                        {
-                                            try {
-                                                List<TdApi.Message> messageList = messageMap.get(mes.mediaAlbumId);
-                                                messageList.add(mes);
-                                                System.out.println("ss");
-                                            }
-                                            catch (Exception e)
-                                            {
-                                                System.out.println("sq");
-                                            }
-
-                                        }
-                                        else
-                                        {
-                                            List<TdApi.Message> messageList = new ArrayList<>();
+                                    TdApi.Message mes = new TdApi.Message();
+                                    mes.chatId = update.message.chatId;
+                                    mes.mediaAlbumId = update.message.mediaAlbumId;
+                                    mes.id = update.message.id;
+                                    mes.content = update.message.content;
+                                    if (messageMap.containsKey(mes.mediaAlbumId)) {
+                                        try {
+                                            List<TdApi.Message> messageList = messageMap.get(mes.mediaAlbumId);
                                             messageList.add(mes);
-                                            messageMap.put(mes.mediaAlbumId,messageList);
+                                        } catch (Exception e) {
+                                            System.out.println("Error on grouping MessageGroup!");
                                         }
-                                }
-                                else {
 
-                                    if(!messageMap.isEmpty())
-                                    {
-                                        for(long key : messageMap.keySet())
-                                        {
-                                            long[] mesIds = messageMap.get(key).stream().mapToLong(a-> a.id).toArray();
-
-                                            TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
-                                            forwardMessage.fromChatId = messageMap.get(key).get(0).chatId; // ID исходного чата
-                                            forwardMessage.messageIds = mesIds; // ID сообщения для пересылки
-                                            forwardMessage.messageThreadId = messageMap.get(key).get(0).messageThreadId;
-                                            forwardMessage.chatId = botId; // ID целевого чата
-                                            client.send(forwardMessage);
-                                            System.out.printf("Received new MediaGroupMessage");
-                                        }
-                                        messageMap.clear();
+                                    } else {
+                                        List<TdApi.Message> messageList = new ArrayList<>();
+                                        messageList.add(mes);
+                                        messageMap.put(mes.mediaAlbumId, messageList);
                                     }
-
+                                } else {
                                     TdApi.ForwardMessages forwardMessage = new TdApi.ForwardMessages();
 
                                     forwardMessage.fromChatId = chatId; // ID исходного чата
@@ -402,12 +421,8 @@ public class TgClientService {
                                     forwardMessage.chatId = botId; // ID целевого чата
                                     client.send(forwardMessage);
                                     System.out.printf("Received new message from chat %s (%s): %s%n", title, chatId, text);
-
                                 }
-
                             }
-
-
                         }
                     });
         }
