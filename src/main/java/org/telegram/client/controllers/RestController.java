@@ -31,7 +31,14 @@ public class RestController {
         try {
             TdApi.Chat chat = telegramClient.joinPrivateChat(inviteLink);
             if (chat != null) {
-                return chat.title + ";" + chat.id + ";" + inviteLink;
+                if(!chat.title.contains(";")) {
+                    return chat.title + ";" + chat.id + ";" + inviteLink;
+                }
+                else
+                {
+                    return chat.title.replace(";","_") + ";" + chat.id + ";" + inviteLink;
+                }
+
             }
         } catch (ExecutionException | TimeoutException e) {
             return "chat_is_already";
@@ -56,7 +63,13 @@ public class RestController {
             TdApi.Chat chat = telegramClient.findAChatByName(chatName);
 
             if (telegramClient.joinChat(chat.id)) {
-                return chat.title + ";" + chat.id;
+                if(!chat.title.contains(";")) {
+                    return chat.title + ";" + chat.id;
+                }
+                else
+                {
+                    return chat.title.replace(";","_") + ";" + chat.id;
+                }
             }
 
         } catch (ExecutionException | TimeoutException e) {
